@@ -47,7 +47,7 @@ csvHistsData = [
 mHistsData = [ 
         ("M#mu#mu" , (100,0,150), "Mmm" ,[]),
         ("Mjj"     , (100,0,150), "Mjj" ,[]),
-        ("Mmmjj" , (100,0,150), "gMmm" ,[]) ]
+        ("M#mu#mujj" , (100,0,150), "Mmmjj" ,[]) ]
 
 from StackPlotter import StackPlotter
 
