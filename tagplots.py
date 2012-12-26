@@ -1,24 +1,29 @@
 import ROOT 
 
-sigFile   = ROOT.TFile("../HToZZTo2L2Q_M-125_8TeV_PATtuple_WithoutPU.root")
-sigFilePU = ROOT.TFile("../HToZZTo2L2Q_M-125_8TeV_PATtuple_WithPU.root")
+ROOT.gROOT.SetBatch()
 
-sig   = sigFile.Get("HZZNTuples/NTuples")
-sigPU = sigFilePU.Get("HZZNTuples/NTuples")
+sigFile   = [ROOT.TFile("../HToZZTo2L2Q_M-125_8TeV_PATtuple_WithoutPU.root"),
+             ROOT.TFile("../GluGluToHToZZTo2L2Q_M-125_7TeV_PAT_WithoutPU.root")]
+
+sigFilePU = [ROOT.TFile("../HToZZTo2L2Q_M-125_8TeV_PATtuple_WithPU.root"),
+	     ROOT.TFile("../GluGluToHToZZTo2L2Q_M-125_7TeV_PAT_WithPU.root")]
+
+sig   = [s.Get("HZZNTuples/NTuples") for s in sigFile]
+sigPU = [s.Get("HZZNTuples/NTuples") for s in sigFilePU]
 
 from RooFuncs import MakeInvm,Register
-MakeInvm(sig,"Mmm",["Mu","Mu"],["[0]","[1]"])
-MakeInvm(sig,"Mjj",["Jet","Jet"],["[0]","[1]"])
-MakeInvm(sig,"Mmmjj",["Jet","Jet","Mu","Mu"],["[0]","[1]","[0]","[1]"])
+MakeInvm(sig[0],"Mmm",["Mu","Mu"],["[0]","[1]"])
+MakeInvm(sig[0],"Mjj",["Jet","Jet"],["[0]","[1]"])
+MakeInvm(sig[0],"Mmmjj",["Jet","Jet","Mu","Mu"],["[0]","[1]","[0]","[1]"])
 
-MakeInvm(sig,"gMmm",["GenMu","GenMu"],["[0]","[1]"])
-MakeInvm(sig,"gMbb",["GenB","GenB"],["[0]","[1]"])
+MakeInvm(sig[0],"gMmm",["GenMu","GenMu"],["[0]","[1]"])
+MakeInvm(sig[0],"gMbb",["GenB","GenB"],["[0]","[1]"])
 
-Register(sig,"DRjb11" , "sqrt((GenBPhi[0]-JetPhi[0])^2+(GenBEta[0]-JetEta[0])^2)")
-Register(sig,"DRjb12" , "sqrt((GenBPhi[0]-JetPhi[1])^2+(GenBEta[0]-JetEta[1])^2)")
-Register(sig,"DRjb21" , "sqrt((GenBPhi[1]-JetPhi[0])^2+(GenBEta[1]-JetEta[0])^2)")
-Register(sig,"DRjb22" , "sqrt((GenBPhi[1]-JetPhi[1])^2+(GenBEta[1]-JetEta[1])^2)")
-Register(sig,"DRjbmin", "min(DRjb11,min(DRjb12,min(DRjb21,DRjb22)))")
+Register(sig[0],"DRjb11" , "sqrt((GenBPhi[0]-JetPhi[0])^2+(GenBEta[0]-JetEta[0])^2)")
+Register(sig[0],"DRjb12" , "sqrt((GenBPhi[0]-JetPhi[1])^2+(GenBEta[0]-JetEta[1])^2)")
+Register(sig[0],"DRjb21" , "sqrt((GenBPhi[1]-JetPhi[0])^2+(GenBEta[1]-JetEta[0])^2)")
+Register(sig[0],"DRjb22" , "sqrt((GenBPhi[1]-JetPhi[1])^2+(GenBEta[1]-JetEta[1])^2)")
+Register(sig[0],"DRjbmin", "min(DRjb11,min(DRjb12,min(DRjb21,DRjb22)))")
  
 
 ########################## Cuts #########################33
@@ -27,7 +32,7 @@ Register(sig,"DRjbmin", "min(DRjb11,min(DRjb12,min(DRjb21,DRjb22)))")
 quantitiyCuts = ROOT.TCut("MuPt@.size()>=2 && JetPt@.size()>=2 && MuCharge[0]*MuCharge[1] <0" )
 
 # Cuts on the lepton pt
-lptCuts  = ROOT.TCut("gMmm<60 && DRjb11<0.5 && DRjb22<0.5")+quantitiyCuts
+lptCuts  = ROOT.TCut("((DRjb11<0.5 && DRjb22<0.5) || (DRjb12<0.5 && DRjb21<0.5))")+quantitiyCuts
 
 # Cuts on jets CSVs
 nobtag   = ROOT.TCut("JetCsv[0] < 0.679 && JetCsv[1] < 0.679")
@@ -72,14 +77,15 @@ from StackPlotter import StackPlotter
 
 plotter = StackPlotter("Hists.pdf")
 
-plotter.PaveText("Mjj and PU",["Selection:","2jets,2#mu - opposite signs","DR(j1,genb1),DR(j2,genb2)<0.5","M(gen#mu1,gen#mu2)<60"]) 
+plotter.PaveText("Mjj and PU",["Selection:","2jets,2#mu - opposite signs","DR(j1,genb1),DR(j2,genb2)<0.5 or DR(j1,genb2),DR(j2,genb1)<0.5 "]) 
 
-plotter.Draw(sig  ,"Btag cuts PT without PU."  , cuts,  ptHistsData)
-plotter.Draw(sigPU,"Btag cuts PT with PU."  , cuts,  ptHistsData)
-plotter.Draw(sig  ,"Btag cuts Csv without PU." , cuts, csvHistsData)
-plotter.Draw(sigPU,"Btag cuts Csv with PU." , cuts, csvHistsData)
-plotter.Draw(sig  ,"Btag cuts inv mass without PU." , cuts, mHistsData)
-plotter.Draw(sigPU,"Btag cuts inv mass with PU." , cuts, mHistsData)
-plotter.Draw(sig  ,"Btag cuts DR without PU." , cuts, drHistsData)
-plotter.Draw(sigPU,"Btag cuts DR with PU." , cuts, drHistsData)
+for txt,s,spu in [("8 TeV ",sig[0],sigPU[0]),("7 TeV ",sig[1],sigPU[1])]:
+	plotter.Draw(s  ,txt + "PT without PU."  , cuts,  ptHistsData)
+	plotter.Draw(spu,txt + "PT with PU."  , cuts,  ptHistsData)
+	plotter.Draw(s  ,txt + "Csv without PU." , cuts, csvHistsData)
+	plotter.Draw(spu,txt + "Csv with PU." , cuts, csvHistsData)
+	plotter.Draw(s  ,txt + "inv mass without PU." , cuts, mHistsData)
+	plotter.Draw(spu,txt + "inv mass with PU." , cuts, mHistsData)
+	plotter.Draw(s  ,txt + "DR without PU." , cuts, drHistsData)
+	plotter.Draw(spu,txt + "DR with PU." , cuts, drHistsData)
 plotter.Finish()
