@@ -26,10 +26,17 @@ sndbtag  = ROOT.TCut("JetCsv[0] < 0.679 && JetCsv[1] > 0.679")
 twobtag  = ROOT.TCut("JetCsv[0] > 0.679 && JetCsv[1] > 0.679")
 
 ########################## Cuts info and colors #########################33
+
 cuts =        [( lptCuts + nobtag , "No btags"                 , ROOT.kBlue),
                ( lptCuts + fstbtag, "Only first b-tagged"      , ROOT.kGreen),
                ( lptCuts + sndbtag, "Only second b-tagged"     , ROOT.kGreen+3),
                ( lptCuts + twobtag, "Both b-tagged"            , ROOT.kRed)  ]
+
+cutsA =        [( lptCuts + fstbtag, "Only first b-tagged"      , ROOT.kGreen),
+               ( lptCuts + sndbtag, "Only second b-tagged"     , ROOT.kGreen+3),
+               ( lptCuts + twobtag, "Both b-tagged"            , ROOT.kRed)  ]
+
+
 
 
 
@@ -55,9 +62,8 @@ plotter = StackPlotter("Hists.pdf")
 
 plotter.PaveText("8 TeV Backgroinds",["Selection:","2jets,2#mu - opposite signs","PFNoPileUp is \'off\'"]) 
 
-for txt,t in zip(["DY ","TT "],bkg):
-	plotter.Draw(t,txt + "PT."  , cuts,  ptHistsData)
-	plotter.Draw(t,txt + "Csv." , cuts, csvHistsData)
-	plotter.Draw(t,txt + "inv mass." , cuts, mHistsData)
-	plotter.Draw(t,txt + "DR." , cuts, drHistsData)
+for txt,t,c in zip(["DY ","TT "],bkg,[cutsA,cuts]):
+	plotter.Draw(t,txt + "PT."  , c,  ptHistsData)
+	plotter.Draw(t,txt + "Csv." , c, csvHistsData)
+	plotter.Draw(t,txt + "inv mass." , c, mHistsData)
 plotter.Finish()

@@ -4,6 +4,21 @@ from math import sqrt,ceil
 
 gcSave = []
 class StackPlotter:
+    # Inner class for stats printing
+    class StatsPad:
+        def __init__(self,title,norm):
+            self.norm = norm
+            self.pave =  ROOT.TPaveText(0.65,0.65,0.8,0.8,"NDC")
+            self.pave.SetFillColor(ROOT.kWhite)
+            self.pave.SetBorderSize(1)
+            self.pave.SetTextAlign(22)
+            self.pave.AddText(title)
+        def AddCount(self,count,color):
+            txt = self.pave.AddText("%g" % (count * self.norm))
+            txt.SetTextColor(color if color!=ROOT.kWhite else ROOT.kBlack)
+	def Draw(self): self.pave.Draw()
+
+    # Main class
     def __init__(self,pdfname):
         # Creatin empty cnavas for
         self.dummy = ROOT.TCanvas()
@@ -28,6 +43,24 @@ class StackPlotter:
         self.pdfname = pdfname
         self.canv.Print(self.pdfname+"[") 
 
+    def setupPad(self,title,ndiv):
+        # Setting title
+        self.title.SetText(0.5,0.5,title)
+        self.titlepad.cd()
+        self.title.Draw()
+
+        # Dividing the main pad
+        self.pad.Clear()
+        ny = int(sqrt(ndiv+1.2)) 
+        self.pad.Divide(int(ceil(float(ndiv)/ny)),ny)
+
+    def setupLegend(self,num):
+        self.titlepad.cd()
+        self.lgnd = ROOT.TLegend(0.8,0.0,1.0,1.0)
+        self.lgnd.SetFillColor(ROOT.kWhite)
+        self.lentries = [self.lgnd.AddEntry(self.dummy,"","f") for i in range(num)] 
+        self.lgnd.Draw()
+
     def PaveText(self,title,text):
         self.dummy.cd()
         cuttext = ROOT.TPaveText(0.2,0.2,0.8,0.8,"NDC")
@@ -37,26 +70,16 @@ class StackPlotter:
         self.dummy.Print(self.pdfname,"Title: "+title)
 
 
-    def Draw(self,tree,title,cuts,data):
+    def Draw(self,tree,title,cuts,data,norms={}):
         localGC=[]
-        num = len(data)
-        
-        # Setting title
-        self.title.SetText(0.5,0.5,title)
-        self.titlepad.cd()
-        self.title.Draw()
 
-        # Dividing the main pad
-        self.pad.Clear()
-        ny = int(sqrt(num+1.2)) 
-        self.pad.Divide(int(ceil(float(num)/ny)),ny)
+	normfactor = 1
+	if "cs" and "lumi" in norms:
+	    normfactor = norms["cs"] * norms["lumi"] / tree.GetEntries()
 
-        # Creating the legend
-        self.titlepad.cd()
-        self.lgnd = ROOT.TLegend(0.8,0.0,1.0,1.0)
-        self.lgnd.SetFillColor(ROOT.kWhite)
-        lentries = [self.lgnd.AddEntry(self.dummy,"","f") for i in range(len(cuts))] 
-        self.lgnd.Draw()
+        # Graphics setup
+        self.setupPad(title,len(data))        
+        self.setupLegend(len(cuts))        
 
         # Processing
         npad = 0
@@ -72,12 +95,8 @@ class StackPlotter:
             localGC.append(hstack)
 
             # Adding 'stats' pad
-            stats = ROOT.TPaveText(0.65,0.65,0.8,0.8,"NDC")
+            stats = self.StatsPad(norms["title"] if "title" in norms else "Events:",normfactor)
             localGC.append(stats)
-            stats.SetFillColor(ROOT.kWhite)
-            stats.SetBorderSize(1)
-            stats.SetTextAlign(22)
-            stats.AddText("Events:")
 
             # Processing cuts
             nh = 0
@@ -93,11 +112,10 @@ class StackPlotter:
                 hist.SetLineColor(ROOT.kBlack)
                 tree.Draw(func+">>"+hname, cut)
 
-                lentries[nh].SetObject(hist)
-                lentries[nh].SetLabel(ltitle)
+                self.lentries[nh].SetObject(hist)
+                self.lentries[nh].SetLabel(ltitle)
 
-                txt = stats.AddText(("%d" % hist.GetEntries()))
-                txt.SetTextColor(color if color!=ROOT.kWhite else ROOT.kBlack)
+                stats.AddCount(hist.GetEntries(),color)
 
                 nh += 1
             hstack.Draw("nostack" if 'NoStack' in options else "")

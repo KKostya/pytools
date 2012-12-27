@@ -77,15 +77,15 @@ from StackPlotter import StackPlotter
 
 plotter = StackPlotter("Hists.pdf")
 
-plotter.PaveText("Mjj and PU",["Selection:","2jets,2#mu - opposite signs","DR(j1,genb1),DR(j2,genb2)<0.5 or DR(j1,genb2),DR(j2,genb1)<0.5 "]) 
+plotter.PaveText("Mjj and PU",["Selection:","2jets,2#mu - opposite signs","DR(j1,genb1),DR(j2,genb2)<0.5","or DR(j1,genb2),DR(j2,genb1)<0.5 "]) 
 
-for txt,s,spu in [("8 TeV ",sig[0],sigPU[0]),("7 TeV ",sig[1],sigPU[1])]:
-	plotter.Draw(s  ,txt + "PT without PU."  , cuts,  ptHistsData)
-	plotter.Draw(spu,txt + "PT with PU."  , cuts,  ptHistsData)
-	plotter.Draw(s  ,txt + "Csv without PU." , cuts, csvHistsData)
-	plotter.Draw(spu,txt + "Csv with PU." , cuts, csvHistsData)
-	plotter.Draw(s  ,txt + "inv mass without PU." , cuts, mHistsData)
-	plotter.Draw(spu,txt + "inv mass with PU." , cuts, mHistsData)
-	plotter.Draw(s  ,txt + "DR without PU." , cuts, drHistsData)
-	plotter.Draw(spu,txt + "DR with PU." , cuts, drHistsData)
+for txt,s,spu,cs,lu in zip(["8 TeV ","7 TeV "],sig,sigPU,[57.14,72.81],[20,5]):
+	plotter.Draw(s  ,txt + "PT without PU."       , cuts,  ptHistsData, {"cs":cs,"lumi":lu,"title":"Events@"+str(lu)+" fb^{-1}:"})
+	plotter.Draw(spu,txt + "PT with PU."          , cuts,  ptHistsData, {"cs":cs,"lumi":lu,"title":"Events@"+str(lu)+" fb^{-1}:"})
+	plotter.Draw(s  ,txt + "Csv without PU."      , cuts, csvHistsData, {"cs":cs,"lumi":lu,"title":"Events@"+str(lu)+" fb^{-1}:"})
+	plotter.Draw(spu,txt + "Csv with PU."         , cuts, csvHistsData, {"cs":cs,"lumi":lu,"title":"Events@"+str(lu)+" fb^{-1}:"})
+	plotter.Draw(s  ,txt + "inv mass without PU." , cuts,   mHistsData, {"cs":cs,"lumi":lu,"title":"Events@"+str(lu)+" fb^{-1}:"})
+	plotter.Draw(spu,txt + "inv mass with PU."    , cuts,   mHistsData, {"cs":cs,"lumi":lu,"title":"Events@"+str(lu)+" fb^{-1}:"})
+	plotter.Draw(s  ,txt + "DR without PU."       , cuts,  drHistsData, {"cs":cs,"lumi":lu,"title":"Events@"+str(lu)+" fb^{-1}:"})
+	plotter.Draw(spu,txt + "DR with PU."          , cuts,  drHistsData, {"cs":cs,"lumi":lu,"title":"Events@"+str(lu)+" fb^{-1}:"})
 plotter.Finish()
