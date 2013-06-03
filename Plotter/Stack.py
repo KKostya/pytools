@@ -16,7 +16,7 @@ class StackPlotter:
         def AddCount(self,count,color):
             txt = self.pave.AddText("%g" % (count * self.norm))
             txt.SetTextColor(color if color!=ROOT.kWhite else ROOT.kBlack)
-	def Draw(self): self.pave.Draw()
+        def Draw(self): self.pave.Draw()
 
     # Main class
     def __init__(self,pdfname):
@@ -33,7 +33,7 @@ class StackPlotter:
         self.title.SetTextSize(0.5)
         self.title.SetTextAlign(22)
         self.title.Draw()
-        
+
         # Creating main pad
         self.canv.cd()
         self.pad = ROOT.TPad("histos","",0,0,1,0.9)
@@ -73,9 +73,9 @@ class StackPlotter:
     def Draw(self,tree,title,cuts,data,norms={}):
         localGC=[]
 
-	normfactor = 1
-	if "cs" and "lumi" in norms:
-	    normfactor = norms["cs"] * norms["lumi"] / tree.GetEntries()
+        normfactor = 1
+        if "cs" and "lumi" in norms:
+            normfactor = norms["cs"] * norms["lumi"] / tree.GetEntries()
 
         # Graphics setup
         self.setupPad(title,len(data))        
