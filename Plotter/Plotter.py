@@ -3,6 +3,7 @@ from math import sqrt,ceil
 from itertools import product,izip,count
 
 
+gcSave = []
 class Plotter:
     # Inner class for stats printing
     class StatsPad:
@@ -66,26 +67,27 @@ class Plotter:
         self.lgnd.Draw()
 
     def PaveText(self,title,text):
+        if not title: title = "No title"
         self.dummy.cd()
         cuttext = ROOT.TPaveText(0.2,0.2,0.8,0.8,"NDC")
         cuttext.AddText(title + ":")
-        [cuttext.AddText(t) for t in text]
+        if text: [cuttext.AddText(t) for t in text]
         cuttext.Draw()
         self.dummy.Print(self.pdfname,"Title: "+title)
 
     def SetTrees(self, x, level):
-        if level not in self.levels raise Exception("Choose a level among: " + str(self.levels))
+        if level not in self.levels: raise Exception("Choose a level among: " + str(self.levels))
         self.treeLevel = level
         self.trees = x
     def SetCuts (self,x,level):
-        if level not in self.levels raise Exception("Choose a level among: " + str(self.levels))
+        if level not in self.levels: raise Exception("Choose a level among: " + str(self.levels))
         self.cuts[level]  = x
-    def SetVar  (self,x,level): 
-        if level not in self.levels raise Exception("Choose a level among: " + str(self.levels))
+    def SetVars (self,x,level): 
+        if level not in self.levels: raise Exception("Choose a level among: " + str(self.levels))
         self.varLevel = level 
         self.vrbls = x
 
-    def Draw(self,tree,title,cuts,data,norms={}):
+    def Draw(self):
         localGC=[]
 
         data = {}
@@ -95,8 +97,8 @@ class Plotter:
             if l in self.cuts:      data[l].append(self.cuts[l])
             if self.varLevel  == l: data[l].append(self.vrbls)
 
-        # 2DO -- this. Log, nostack options, statspad
-        #
+        # TODO -- this. Log, nostack options, statspad, normalization, weightexpr
+        # TODO -- ?Decorators?
         # class data:
         #     def __new__(self): 
         #         cuts = [] 
@@ -111,32 +113,32 @@ class Plotter:
         #         if 'title' in d: ttl.append(d['title'])
         #         return ','.join(ttl)                
 
-        cuts = [] 
         tree = None
         var  = None
         for docdat in product(*data[self.levels[0]]):
             # Process sections 
-            sectitle, sectext = [],[]
+            sectitle, sectext,seccut = [],[],[]
             for d in docdat: 
                 if  'tree' in d: tree = d['tree']
-                if   'cut' in d: cuts.append(d['cut'])
+                if   'cut' in d: seccut.append(d['cut'])
                 if   'var' in d: var = d['var']
                 if 'title' in d: sectitle.append(d['title'])
-                if  'text' in d: sectext.append( d['text'])
+                if  'text' in d: sectext += d['text']
             self.PaveText(','.join(sectitle), sectext)
 
             for secdat in product(*data[self.levels[1]]):
                 # Process pages
-                pgtitle = []
+                pgtitle,pgcut = [],seccut[:]
                 for d in secdat:
                     if  'tree' in d: tree = d['tree']
-                    if   'cut' in d: cuts.append(d['cut'])
+                    if   'cut' in d: pgcut.append(d['cut'])
                     if   'var' in d: var = d['var']
                     if 'title' in d: pgtitle.append(d['title'])
 
                 # finding number of pads and number of legend entries
-                npads = 1; for x in data[self.levels[2]]: npads *= len(x)
-                nlgnd = 1; for x in data[self.levels[3]]: nlgnd *= len(x)
+                npads,nlgnd = 1,1
+                for x in data[self.levels[2]]: npads *= len(x)
+                for x in data[self.levels[3]]: nlgnd *= len(x)
 
                 self.setupPad   (','.join(pgtitle),npads)
                 self.setupLegend(nlgnd)
@@ -144,10 +146,10 @@ class Plotter:
                 for pagdat,npad in izip(product(*data[self.levels[2]]),count(1)):
                     # Process pads
                     self.pad.cd(npad)
-                    padtitle = []
+                    padtitle,padcut = [],pgcut[:]
                     for d in pagdat:
                         if  'tree' in d: tree = d['tree']
-                        if   'cut' in d: cuts.append(d['cut'])
+                        if   'cut' in d: padcut.append(d['cut'])
                         if   'var' in d: var = d['var']
                         if 'title' in d: padtitle.append(d['title'])
 
@@ -157,20 +159,21 @@ class Plotter:
 
                     for paddat,nh in izip(product(*data[self.levels[3]]),count(0)):
                         # Processing histograms 
-                        htitle = []
-                        color = nh
+                        htitle, hcut = [], padcut[:]
+                        color = nh+2
+                        print nh,paddat
                         for d in paddat:
                             if  'tree' in d: tree = d['tree']
-                            if   'cut' in d: cuts.append(d['cut'])
+                            if   'cut' in d: hcut.append(d['cut'])
                             if   'var' in d: var = d['var']
                             if 'title' in d: htitle.append(d['title'])
                             if 'color' in d: color = d['color'] 
                         #Payback time here:
                         if  var == None: raise Exception("No variables were selected")
                         if tree == None: raise Exception("No trees were provided")
-                        
+
                         hname = "htemp"+str(nh)
-                        hist = ROOT.TH1F(hname,"No title",var['nbins'],var['min'],var['max']) 
+                        hist = ROOT.TH1F(hname,"No title",var[1],var[2],var[3]) 
                         hstack.Add(hist)
                         localGC.append(hist)
 
@@ -178,16 +181,15 @@ class Plotter:
                         hist.SetFillColor(color)
                         hist.SetMarkerColor(color if color!=ROOT.kWhite else ROOT.kBlack)
                         hist.SetLineColor(ROOT.kBlack)
-                        tree.Draw(func+">>"+hname, '&&'.join(["("+c+")" for c in cuts])
+                        tree.Draw(var[0]+">>"+hname, '&&'.join(["("+c+")" for c in hcut if c]))
 
                         self.lentries[nh].SetObject(hist)
+                        print nh,','.join(htitle)
                         self.lentries[nh].SetLabel(','.join(htitle))
 
-                    hstack.Draw("")
+                    hstack.Draw("nostack")
 
                 self.canv.Print(self.pdfname,"Title: " + ','.join(pgtitle)) 
-
-
 
     def Finish(self):
         self.canv.Print(self.pdfname+"]")
