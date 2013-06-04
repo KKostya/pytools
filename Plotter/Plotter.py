@@ -99,23 +99,11 @@ class Plotter:
 
         # TODO -- this. Log, nostack options, statspad, normalization, weightexpr
         # TODO -- ?Decorators?
-        # class data:
-        #     def __new__(self): 
-        #         cuts = [] 
-        #         tree = None
-        #         var  = None
-        #         options = []
-        #     def process(d):
-        #         ttl = []  
-        #         if  'tree' in d: tree = d['tree']
-        #         if   'cut' in d: cuts.append(d['cut'])
-        #         if   'var' in d: var = d['var']
-        #         if 'title' in d: ttl.append(d['title'])
-        #         return ','.join(ttl)                
 
         tree = None
         var  = None
         for docdat in product(*data[self.levels[0]]):
+            print "DOC",docdat
             # Process sections 
             sectitle, sectext,seccut = [],[],[]
             for d in docdat: 
@@ -127,6 +115,7 @@ class Plotter:
             self.PaveText(','.join(sectitle), sectext)
 
             for secdat in product(*data[self.levels[1]]):
+                print "  SEC",secdat
                 # Process pages
                 pgtitle,pgcut = [],seccut[:]
                 for d in secdat:
@@ -142,8 +131,8 @@ class Plotter:
 
                 self.setupPad   (','.join(pgtitle),npads)
                 self.setupLegend(nlgnd)
-
                 for pagdat,npad in izip(product(*data[self.levels[2]]),count(1)):
+                    print "     PAG",pagdat
                     # Process pads
                     self.pad.cd(npad)
                     padtitle,padcut = [],pgcut[:]
@@ -158,19 +147,21 @@ class Plotter:
                     localGC.append(hstack)
 
                     for paddat,nh in izip(product(*data[self.levels[3]]),count(0)):
+                        print "        PAG",pagdat
                         # Processing histograms 
                         htitle, hcut = [], padcut[:]
                         color = nh+2
-                        print nh,paddat
                         for d in paddat:
                             if  'tree' in d: tree = d['tree']
                             if   'cut' in d: hcut.append(d['cut'])
                             if   'var' in d: var = d['var']
                             if 'title' in d: htitle.append(d['title'])
                             if 'color' in d: color = d['color'] 
-                        #Payback time here:
+                        #Payback time here
                         if  var == None: raise Exception("No variables were selected")
                         if tree == None: raise Exception("No trees were provided")
+
+                        print "           plotting",nh,str(var),str(hcut)
 
                         hname = "htemp"+str(nh)
                         hist = ROOT.TH1F(hname,"No title",var[1],var[2],var[3]) 
@@ -184,7 +175,6 @@ class Plotter:
                         tree.Draw(var[0]+">>"+hname, '&&'.join(["("+c+")" for c in hcut if c]))
 
                         self.lentries[nh].SetObject(hist)
-                        print nh,','.join(htitle)
                         self.lentries[nh].SetLabel(','.join(htitle))
 
                     hstack.Draw("nostack")
