@@ -25,54 +25,6 @@ def DrawHistogram(data,nh):
     data.lentry.SetObject(hist)
     data.lentry.SetLabel(data.title)
 
-def HistLoop(f,pdat):
-    def ret(dt,idx):
-        for paddat,nh in izip(product(*pdat),count(0)):
-            # Processing histograms 
-            htitle, dt.cuts = [], dt.padcut[:]
-            dt.color = nh+2
-            for d in paddat:
-                if 'title' in d: htitle.append(d['title'])
-                if   'cut' in d: dt.cuts.append(d['cut'])
-                if  'tree' in d: dt.tree  = d['tree']
-                if   'var' in d: dt.var   = d['var']
-                if 'color' in d: dt.color = d['color']
-            dt.lentry = dt.lentries[nh]
-            dt.title  = ','.join(htitle)
-            f(dt,nh)
-    return ret
-
-#def SectLoop(f,pgdat):
-#    def ret(dt,idx):
-#        for secdat in product(*data[self.levels[1]]):
-#            # Process pages
-#            pgtitle,dt.pgcut = [],dt.seccut[:]
-#            for d in secdat:
-#                if 'title' in d: pgtitle.append(d['title'])
-#                if   'cut' in d: dt.pgcut.append(d['cut'])
-#                if  'tree' in d: dt.tree = d['tree']
-#                if   'var' in d: dt.var = d['var']
-#            # finding number of pads and number of legend entries
-#            npads,nlgnd = 1,1
-#            for x in data[self.levels[2]]: npads *= len(x)
-#            for x in data[self.levels[3]]: nlgnd *= len(x)
-#
-#                self.setupPad   (','.join(pgtitle),npads)
-#                self.setupLegend(nlgnd)
-#                dt.lentries = self.lentries
-#                dt.pad = self.pad
-#
-#                f = DrawHistogram
-#                f = HistLoop(f,data[self.levels[3]])
-#                f = PadLoop (f,data[self.levels[2]])
-#                f(dt,0)
-#
-#                self.canv.Print(self.pdfname,"Title: " + ','.join(pgtitle)) 
-
-
-
-
-
 gcSave = []
 class Plotter:
     # Inner class for stats printing
@@ -92,8 +44,14 @@ class Plotter:
     # Main class
     def __init__(self,pdfname):
         # General information
-        self.levels = ['doc','sec','pag','pad']
+
+        self.levels = ['pad','pag','sec','doc']
+        self.decorators =  { 'pad': self.HistLoop, 
+                             'pag': self.PadLoop, 
+                             'sec': self.PageLoop, 
+                             'doc': self.SectLoop  }
         self.cuts = {}
+
 
         # Creatin empty canvas for
         self.dummy = ROOT.TCanvas()
@@ -157,17 +115,49 @@ class Plotter:
         self.varLevel = level 
         self.vrbls = x
 
+    def Draw(self):
+        localGC=[]
+
+        # Utility class that manages data across levels
+        class Data:
+            def __init__(self):
+                self.tree = None
+                self.var  = None
+                self.GC = []
+            def Fill(self, dat, title, cuts):
+                for d in dat: 
+                    if  'tree' in d:  self.tree = d['tree']
+                    if   'var' in d:  self.var  = d['var']
+                    if 'title' in d: title.append(d['title'])
+                    if   'cut' in d:  cuts.append(d['cut'])
+        dt = Data()
+
+        # TODO Log and nostack options, statspad, normalization, weightexpr
+
+        f = DrawHistogram
+        for l in self.levels:
+            data=[]
+            if self.treeLevel == l: data.append(self.trees)
+            if l in self.cuts:      data.append(self.cuts[l])
+            if self.varLevel  == l: data.append(self.vrbls)
+            f = self.decorators[l](f,data)
+        f(dt,0)
+
+
     def HistLoop(self,f,pdat):
         def ret(dt,idx):
+            # Creating legend
+            nlgnd = 1
+            for x in pdat: nlgnd *= len(x)
+            self.setupLegend(nlgnd)
+            # Looping
+            self.pad.cd(idx)
             for paddat,nh in izip(product(*pdat),count(0)):
                 # Processing histograms 
                 htitle, dt.cuts = [], dt.padcut[:]
                 dt.color = nh+2
-                for d in paddat:
-                    if 'title' in d: htitle.append(d['title'])
-                    if   'cut' in d: dt.cuts.append(d['cut'])
-                    if  'tree' in d: dt.tree  = d['tree']
-                    if   'var' in d: dt.var   = d['var']
+                dt.Fill(paddat,htitle,dt.cuts)
+                for d in paddat: 
                     if 'color' in d: dt.color = d['color']
                 dt.lentry = self.lentries[nh]
                 dt.title  = ','.join(htitle)
@@ -176,15 +166,17 @@ class Plotter:
 
     def PadLoop(self,f,pgdat):
         def ret(dt,idx):
+            # Creating Pads
+            npads = 1
+            for x in pgdat: npads *= len(x)
+            self.setupPad(','.join(dt.pgtitle),npads)
+            # Looping
             for pagdat,npad in izip(product(*pgdat),count(1)):
                 # Process pads
                 self.pad.cd(npad)
-                padtitle,dt.padcut = [],dt.pgcut[:]
-                for d in pagdat:
-                    if 'title' in d: padtitle.append(d['title'])
-                    if   'cut' in d: dt.padcut.append(d['cut'])
-                    if  'tree' in d: dt.tree = d['tree']
-                    if   'var' in d: dt.var  = d['var']
+                padtitle  = []
+                dt.padcut = dt.pgcut[:]
+                dt.Fill(pagdat,padtitle,dt.padcut)
                 # Creating histogram stack
                 dt.hstack = ROOT.THStack("hs",','.join(padtitle))
                 dt.GC.append(dt.hstack)
@@ -192,94 +184,28 @@ class Plotter:
                 dt.hstack.Draw("nostack")
         return ret
 
-#    def SectLoop(self,f,scdat):
-#        def ret(dt,idx):
-#            for secdat,nsec in izip(product(*scdat),count()):
-#                # Process pages
-#                pgtitle,dt.pgcut = [],dt.seccut[:]
-#                for d in secdat:
-#                    if 'title' in d: pgtitle.append(d['title'])
-#                    if   'cut' in d: dt.pgcut.append(d['cut'])
-#                    if  'tree' in d: dt.tree = d['tree']
-#                    if   'var' in d: dt.var  = d['var']
-#
-#                # finding number of pads and number of legend entries
-#                npads,nlgnd = 1,1
-#                for x in data[self.levels[2]]: npads *= len(x)
-#                for x in data[self.levels[3]]: nlgnd *= len(x)
-#
-#                self.setupPad   (','.join(pgtitle),npads)
-#                self.setupLegend(nlgnd)
-#                dt.lentries = self.lentries
-#                #dt.pad = self.pad
-#
-#                f = DrawHistogram
-#                f = self.HistLoop(f,data[self.levels[3]])
-#                f = self.PadLoop (f,data[self.levels[2]])
-#                f(dt,0)
-#
-#                self.canv.Print(self.pdfname,"Title: " + ','.join(pgtitle)) 
-
-
-    def Draw(self):
-        localGC=[]
-
-        data = {}
-        for l in self.levels:
-            data[l]=[]
-            if self.treeLevel == l: data[l].append(self.trees)
-            if l in self.cuts:      data[l].append(self.cuts[l])
-            if self.varLevel  == l: data[l].append(self.vrbls)
-
-        # TODO -- this. Log, nostack options, statspad, normalization, weightexpr
-        # TODO -- ?Decorators?
-
-        class Data:
-            def __init__(self):
-                self.tree = None
-                self.var  = None
-                self.GC = []
-
-        dt = Data()
-
-        for docdat in product(*data[self.levels[0]]):
-            print "DOC",docdat
-            # Process sections 
-            sectitle, sectext,seccut = [],[],[]
-            for d in docdat: 
-                if  'tree' in d: dt.tree = d['tree']
-                if   'cut' in d: seccut.append(d['cut'])
-                if   'var' in d: dt.var = d['var']
-                if 'title' in d: sectitle.append(d['title'])
-                if  'text' in d: sectext += d['text']
-            self.PaveText(','.join(sectitle), sectext)
-
-            for secdat in product(*data[self.levels[1]]):
-                print "  SEC",secdat
+    def PageLoop(self,f,scdat):
+        def ret(dt,idx):
+            for secdat,npage in izip(product(*scdat),count()):
                 # Process pages
-                pgtitle,dt.pgcut = [],seccut[:]
-                for d in secdat:
-                    if  'tree' in d: dt.tree = d['tree']
-                    if   'cut' in d: dt.pgcut.append(d['cut'])
-                    if   'var' in d: dt.var = d['var']
-                    if 'title' in d: pgtitle.append(d['title'])
+                dt.pgtitle = [] 
+                dt.pgcut   = dt.seccut[:]
+                dt.Fill(secdat,dt.pgtitle,dt.pgcut)
+                f(dt,npage)
+                self.canv.Print(self.pdfname,"Title: " + ','.join(dt.pgtitle)) 
+        return ret
 
-                # finding number of pads and number of legend entries
-                npads,nlgnd = 1,1
-                for x in data[self.levels[2]]: npads *= len(x)
-                for x in data[self.levels[3]]: nlgnd *= len(x)
-
-                self.setupPad   (','.join(pgtitle),npads)
-                self.setupLegend(nlgnd)
-                dt.lentries = self.lentries
-                #dt.pad = self.pad
-
-                f = DrawHistogram
-                f = self.HistLoop(f,data[self.levels[3]])
-                f = self.PadLoop (f,data[self.levels[2]])
-                f(dt,0)
-
-                self.canv.Print(self.pdfname,"Title: " + ','.join(pgtitle)) 
+    def SectLoop(self,f,dcdat):
+        def ret(dt,idx):
+            for docdat,nsec in izip(product(*dcdat),count()):
+                # Process sections 
+                sectitle, sectext, dt.seccut = [],[],[]
+                dt.Fill(docdat,sectitle,dt.seccut)
+                for d in docdat: 
+                    if 'text' in d: sectext += d['text']
+                self.PaveText(','.join(sectitle), sectext)
+                f(dt,nsec) 
+        return ret
 
     def Finish(self):
         self.canv.Print(self.pdfname+"]")
