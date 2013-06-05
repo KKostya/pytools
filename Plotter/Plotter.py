@@ -4,26 +4,104 @@ from itertools import product,izip,count
 
 
 
+class HistogramDrawer:
+    def Run(self,data,nh):
+        #  Assertions
+        #Payback time here
+        if data.var  == None: raise Exception("No variables were selected")
+        if data.tree == None: raise Exception("No trees were provided")
+        # Plotting
+        hname = "htemp"+str(nh)
+        hist = ROOT.TH1F(hname,"No title",data.var[1],data.var[2],data.var[3]) 
+        data.hstack.Add(hist)
+        data.GC.append(hist)
 
-def DrawHistogram(data,nh):
-    #  Assertions
-    #Payback time here
-    if data.var  == None: raise Exception("No variables were selected")
-    if data.tree == None: raise Exception("No trees were provided")
-    # Plotting
-    hname = "htemp"+str(nh)
-    hist = ROOT.TH1F(hname,"No title",data.var[1],data.var[2],data.var[3]) 
-    data.hstack.Add(hist)
-    data.GC.append(hist)
+        hist.SetStats(ROOT.kFALSE)
+        hist.SetFillColor(data.color)
+        hist.SetMarkerColor(data.color if data.color!=ROOT.kWhite else ROOT.kBlack)
+        hist.SetLineColor(ROOT.kBlack)
+        data.tree.Draw(data.var[0]+">>"+hname, '&&'.join(["("+c+")" for c in data.cuts if c]))
 
-    hist.SetStats(ROOT.kFALSE)
-    hist.SetFillColor(data.color)
-    hist.SetMarkerColor(data.color if data.color!=ROOT.kWhite else ROOT.kBlack)
-    hist.SetLineColor(ROOT.kBlack)
-    data.tree.Draw(data.var[0]+">>"+hname, '&&'.join(["("+c+")" for c in data.cuts if c]))
+        data.lentry.SetObject(hist)
+        data.lentry.SetLabel(data.title)
 
-    data.lentry.SetObject(hist)
-    data.lentry.SetLabel(data.title)
+class Looper:
+    def SetData(self,data):
+        self.data = data
+    def SetInner(self,inn):
+        self.innerLoop = inn
+
+class HistLoop(Looper):
+    def Run(self,dt,idx):
+        print "   Hist Loop"
+        # Creating legend
+        nlgnd = 1
+        for x in self.data: nlgnd *= len(x)
+        dt.plotter.setupLegend(nlgnd)
+        # Looping
+        dt.plotter.pad.cd(idx)
+        for paddat,nh in izip(product(*self.data),count(0)):
+            # Processing histograms 
+            htitle, dt.cuts = [], dt.padcut[:]
+            dt.color = nh+2
+            dt.Fill(paddat,htitle,dt.cuts)
+            for d in paddat: 
+                if 'color' in d: dt.color = d['color']
+            dt.lentry = dt.plotter.lentries[nh]
+            dt.title  = ','.join(htitle)
+            self.innerLoop.Run(dt,nh)
+
+class PadLoop(Looper):
+    def Run(self,dt,idx):
+        print "  Pad Loop"
+        # Creating Pads
+        npads = 1
+        for x in self.data: npads *= len(x)
+        dt.plotter.setupPad(','.join(dt.pgtitle),npads)
+        # Looping
+        for pagdat,npad in izip(product(*self.data),count(1)):
+            # Process pads
+            dt.plotter.pad.cd(npad)
+            padtitle  = []
+            dt.padcut = dt.pgcut[:]
+            dt.Fill(pagdat,padtitle,dt.padcut)
+            # Creating histogram stack
+            dt.hstack = ROOT.THStack("hs",','.join(padtitle))
+            dt.GC.append(dt.hstack)
+            self.innerLoop.Run(dt,npad)
+            dt.hstack.Draw("nostack")
+        dt.plotter.canv.Print(dt.plotter.pdfname,"Title: " + ','.join(dt.pgtitle)) 
+
+class PageLoop(Looper):
+    def Run(self,dt,idx):
+        print " Page Loop"
+        for secdat,npage in izip(product(*self.data),count()):
+            # Process pages
+            dt.pgtitle = [] 
+            dt.pgcut   = dt.seccut[:]
+            dt.Fill(secdat,dt.pgtitle,dt.pgcut)
+            self.innerLoop.Run(dt,npage)
+
+class SectLoop(Looper):
+    def Run(self,dt,idx):
+        print "Section Loop"
+        for docdat,nsec in izip(product(*self.data),count()):
+            # Process sections 
+            sectitle, sectext, dt.seccut = [],[],[]
+            dt.Fill(docdat,sectitle,dt.seccut)
+            for d in docdat: 
+                if 'text' in d: sectext += d['text']
+            dt.plotter.PaveText(','.join(sectitle), sectext)
+            self.innerLoop.Run(dt,nsec) 
+
+class ListLoop(Looper):
+    def Run(self,dt,idx):
+        print "-------"
+        databack = self.innerLoop.data[:]
+        for lstdat in self.data:
+            self.innerLoop.data = databack + [lstdat]
+            self.innerLoop.Run(dt,idx) 
+        self.innerLoop.data = databack
 
 gcSave = []
 class Plotter:
@@ -46,10 +124,10 @@ class Plotter:
         # General information
 
         self.levels = ['pad','pag','sec','doc']
-        self.decorators =  { 'pad': self.HistLoop, 
-                             'pag': self.PadLoop, 
-                             'sec': self.PageLoop, 
-                             'doc': self.SectLoop  }
+        self.loopers =     { 'pad': HistLoop(), 
+                             'pag': PadLoop() , 
+                             'sec': PageLoop(), 
+                             'doc': SectLoop()  }
         self.cuts = {}
 
 
@@ -131,81 +209,27 @@ class Plotter:
                     if 'title' in d: title.append(d['title'])
                     if   'cut' in d:  cuts.append(d['cut'])
         dt = Data()
+        dt.plotter = self
 
         # TODO Log and nostack options, statspad, normalization, weightexpr
 
-        f = DrawHistogram
+        f = HistogramDrawer()
         for l in self.levels:
             data=[]
             if self.treeLevel == l: data.append(self.trees)
             if l in self.cuts:      data.append(self.cuts[l])
-            if self.varLevel  == l: data.append(self.vrbls)
-            f = self.decorators[l](f,data)
-        f(dt,0)
-
-
-    def HistLoop(self,f,pdat):
-        def ret(dt,idx):
-            # Creating legend
-            nlgnd = 1
-            for x in pdat: nlgnd *= len(x)
-            self.setupLegend(nlgnd)
-            # Looping
-            self.pad.cd(idx)
-            for paddat,nh in izip(product(*pdat),count(0)):
-                # Processing histograms 
-                htitle, dt.cuts = [], dt.padcut[:]
-                dt.color = nh+2
-                dt.Fill(paddat,htitle,dt.cuts)
-                for d in paddat: 
-                    if 'color' in d: dt.color = d['color']
-                dt.lentry = self.lentries[nh]
-                dt.title  = ','.join(htitle)
-                f(dt,nh)
-        return ret
-
-    def PadLoop(self,f,pgdat):
-        def ret(dt,idx):
-            # Creating Pads
-            npads = 1
-            for x in pgdat: npads *= len(x)
-            self.setupPad(','.join(dt.pgtitle),npads)
-            # Looping
-            for pagdat,npad in izip(product(*pgdat),count(1)):
-                # Process pads
-                self.pad.cd(npad)
-                padtitle  = []
-                dt.padcut = dt.pgcut[:]
-                dt.Fill(pagdat,padtitle,dt.padcut)
-                # Creating histogram stack
-                dt.hstack = ROOT.THStack("hs",','.join(padtitle))
-                dt.GC.append(dt.hstack)
-                f(dt,npad)
-                dt.hstack.Draw("nostack")
-        return ret
-
-    def PageLoop(self,f,scdat):
-        def ret(dt,idx):
-            for secdat,npage in izip(product(*scdat),count()):
-                # Process pages
-                dt.pgtitle = [] 
-                dt.pgcut   = dt.seccut[:]
-                dt.Fill(secdat,dt.pgtitle,dt.pgcut)
-                f(dt,npage)
-                self.canv.Print(self.pdfname,"Title: " + ','.join(dt.pgtitle)) 
-        return ret
-
-    def SectLoop(self,f,dcdat):
-        def ret(dt,idx):
-            for docdat,nsec in izip(product(*dcdat),count()):
-                # Process sections 
-                sectitle, sectext, dt.seccut = [],[],[]
-                dt.Fill(docdat,sectitle,dt.seccut)
-                for d in docdat: 
-                    if 'text' in d: sectext += d['text']
-                self.PaveText(','.join(sectitle), sectext)
-                f(dt,nsec) 
-        return ret
+            if self.varLevel  == l: 
+                if isinstance(self.vrbls[0],list):
+                    listlooper = ListLoop()
+                    listlooper.SetData(self.vrbls)
+                    listlooper.SetInner(f)
+                    f = listlooper 
+                else: data.append(self.vrbls)
+            looper = self.loopers[l]
+            looper.SetData(data)
+            looper.SetInner(f)
+            f = looper 
+        f.Run(dt,0)
 
     def Finish(self):
         self.canv.Print(self.pdfname+"]")
