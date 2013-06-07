@@ -3,6 +3,34 @@ from math import sqrt,ceil
 from itertools import product,izip,count
 
 
+class Looper:
+    def SetData(self,data):
+        self.data = data
+    def SetInner(self,inn):
+        self.innerLoop = inn
+
+    def Unwind(self):
+        windDat = [d for d in self.data if     isinstance(d[0],list)]
+        if not windDat: return
+        passDat = [d for d in self.data if not isinstance(d[0],list)]
+
+        for w in windDat:
+            listlooper = ListLoop()
+            listlooper.SetData(w)
+            listlooper.SetInner(self.innerLoop)
+            self.innerLoop = listlooper 
+
+        self.data = passDat
+
+class ListLoop(Looper):
+    def Run(self,dt,idx):
+        print "-------"
+        databack = self.innerLoop.data[:]
+        for lstdat in self.data:
+            self.innerLoop.data = databack + [lstdat]
+            self.innerLoop.Run(dt,idx) 
+        self.innerLoop.data = databack
+
 
 class HistogramDrawer:
     def Run(self,data,nh):
@@ -30,14 +58,9 @@ class HistogramDrawer:
         data.lentry.SetObject(hist)
         data.lentry.SetLabel(data.GetTitle())
 
-class Looper:
-    def SetData(self,data):
-        self.data = data
-    def SetInner(self,inn):
-        self.innerLoop = inn
-
 class HistLoop(Looper):
     def Run(self,dt,idx):
+        self.Unwind()
         print "   Hist Loop"
         # Creating legend
         nlgnd = 1
@@ -59,6 +82,7 @@ class HistLoop(Looper):
 
 class PadLoop(Looper):
     def Run(self,dt,idx):
+        self.Unwind()
         print "  Pad Loop"
         # Creating Pads
         npads = 1
@@ -74,6 +98,7 @@ class PadLoop(Looper):
 
 class PageLoop(Looper):
     def Run(self,dt,idx):
+        self.Unwind()
         print " Page Loop"
         for secdat,npage in izip(product(*self.data),count()):
             # Process pages
@@ -83,6 +108,7 @@ class PageLoop(Looper):
 
 class SectLoop(Looper):
     def Run(self,dt,idx):
+        self.Unwind()
         print "Section Loop"
         for docdat,nsec in izip(product(*self.data),count()):
             # Process sections 
@@ -92,15 +118,6 @@ class SectLoop(Looper):
                 if 'text' in d: sectext += d['text']
             dt.plotter.PaveText(dt.GetTitle(), sectext)
             self.innerLoop.Run(dt,nsec) 
-
-class ListLoop(Looper):
-    def Run(self,dt,idx):
-        print "-------"
-        databack = self.innerLoop.data[:]
-        for lstdat in self.data:
-            self.innerLoop.data = databack + [lstdat]
-            self.innerLoop.Run(dt,idx) 
-        self.innerLoop.data = databack
 
 gcSave = []
 class Plotter:
@@ -127,7 +144,8 @@ class Plotter:
                              'pag': PadLoop() , 
                              'sec': PageLoop(), 
                              'doc': SectLoop()  }
-        self.cuts = {}
+
+        self.data = { 'pad': [], 'pag': [] , 'sec': [], 'doc': []  }
 
 
         # Creatin empty canvas for
@@ -180,17 +198,10 @@ class Plotter:
         cuttext.Draw()
         self.dummy.Print(self.pdfname,"Title: "+title)
 
-    def SetTrees(self, x, level):
+    
+    def SetData (self,x,level):
         if level not in self.levels: raise Exception("Choose a level among: " + str(self.levels))
-        self.treeLevel = level
-        self.trees = x
-    def SetCuts (self,x,level):
-        if level not in self.levels: raise Exception("Choose a level among: " + str(self.levels))
-        self.cuts[level]  = x
-    def SetVars (self,x,level): 
-        if level not in self.levels: raise Exception("Choose a level among: " + str(self.levels))
-        self.varLevel = level 
-        self.vrbls = x
+        self.data[level].append(x)
 
     def Draw(self):
         localGC=[]
@@ -228,18 +239,8 @@ class Plotter:
 
         f = HistogramDrawer()
         for l in self.levels:
-            data=[]
-            if self.treeLevel == l: data.append(self.trees)
-            if l in self.cuts:      data.append(self.cuts[l])
-            if self.varLevel  == l: 
-                if isinstance(self.vrbls[0],list):
-                    listlooper = ListLoop()
-                    listlooper.SetData(self.vrbls)
-                    listlooper.SetInner(f)
-                    f = listlooper 
-                else: data.append(self.vrbls)
             looper = self.loopers[l]
-            looper.SetData(data)
+            looper.SetData(self.data[l])
             looper.SetInner(f)
             f = looper 
         f.Run(dt,0)
