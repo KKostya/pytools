@@ -17,13 +17,18 @@ class HistogramDrawer:
         data.GC.append(hist)
 
         hist.SetStats(ROOT.kFALSE)
-        hist.SetFillColor(data.color)
-        hist.SetMarkerColor(data.color if data.color!=ROOT.kWhite else ROOT.kBlack)
-        hist.SetLineColor(ROOT.kBlack)
-        data.tree.Draw(data.var[0]+">>"+hname, '&&'.join(["("+c+")" for c in data.cuts if c]))
+        if data.fill: hist.SetFillColor(data.fill)
+        hist.SetLineColor(data.color if data.color else ROOT.kBlack)
+        hist.SetMarkerColor(data.color if data.color else ROOT.kBlack)
 
+        cutstr = '&&'.join(["("+c+")" for c in data.cuts if c])
+        if data.weight: cutstr = "{0}*({1})".format(data.weight,cutstr)
+
+        data.tree.Draw(data.var[0]+">>"+hname, cutstr)
+
+        data.lentry.SetOption("f" if data.fill else "l")
         data.lentry.SetObject(hist)
-        data.lentry.SetLabel(data.title)
+        data.lentry.SetLabel(data.GetTitle())
 
 class Looper:
     def SetData(self,data):
@@ -38,18 +43,19 @@ class HistLoop(Looper):
         nlgnd = 1
         for x in self.data: nlgnd *= len(x)
         dt.plotter.setupLegend(nlgnd)
-        # Looping
+        # Creating histogram stack
         dt.plotter.pad.cd(idx)
+        dt.hstack = ROOT.THStack("hs",dt.GetTitle())
+        dt.GC.append(dt.hstack)
         for paddat,nh in izip(product(*self.data),count(0)):
             # Processing histograms 
             htitle, dt.cuts = [], dt.padcut[:]
-            dt.color = nh+2
-            dt.Fill(paddat,htitle,dt.cuts)
+            dt.Fill(paddat,dt.cuts)
             for d in paddat: 
                 if 'color' in d: dt.color = d['color']
             dt.lentry = dt.plotter.lentries[nh]
-            dt.title  = ','.join(htitle)
             self.innerLoop.Run(dt,nh)
+        dt.hstack.Draw("nostack")
 
 class PadLoop(Looper):
     def Run(self,dt,idx):
@@ -57,29 +63,22 @@ class PadLoop(Looper):
         # Creating Pads
         npads = 1
         for x in self.data: npads *= len(x)
-        dt.plotter.setupPad(','.join(dt.pgtitle),npads)
+        pageTitle = dt.GetTitle()
+        dt.plotter.setupPad(pageTitle,npads)
         # Looping
         for pagdat,npad in izip(product(*self.data),count(1)):
-            # Process pads
-            dt.plotter.pad.cd(npad)
-            padtitle  = []
             dt.padcut = dt.pgcut[:]
-            dt.Fill(pagdat,padtitle,dt.padcut)
-            # Creating histogram stack
-            dt.hstack = ROOT.THStack("hs",','.join(padtitle))
-            dt.GC.append(dt.hstack)
+            dt.Fill(pagdat,dt.padcut)
             self.innerLoop.Run(dt,npad)
-            dt.hstack.Draw("nostack")
-        dt.plotter.canv.Print(dt.plotter.pdfname,"Title: " + ','.join(dt.pgtitle)) 
+        dt.plotter.canv.Print(dt.plotter.pdfname,"Title: " + pageTitle) 
 
 class PageLoop(Looper):
     def Run(self,dt,idx):
         print " Page Loop"
         for secdat,npage in izip(product(*self.data),count()):
             # Process pages
-            dt.pgtitle = [] 
             dt.pgcut   = dt.seccut[:]
-            dt.Fill(secdat,dt.pgtitle,dt.pgcut)
+            dt.Fill(secdat,dt.pgcut)
             self.innerLoop.Run(dt,npage)
 
 class SectLoop(Looper):
@@ -87,11 +86,11 @@ class SectLoop(Looper):
         print "Section Loop"
         for docdat,nsec in izip(product(*self.data),count()):
             # Process sections 
-            sectitle, sectext, dt.seccut = [],[],[]
-            dt.Fill(docdat,sectitle,dt.seccut)
+            sectext, dt.seccut = [],[]
+            dt.Fill(docdat,dt.seccut)
             for d in docdat: 
                 if 'text' in d: sectext += d['text']
-            dt.plotter.PaveText(','.join(sectitle), sectext)
+            dt.plotter.PaveText(dt.GetTitle(), sectext)
             self.innerLoop.Run(dt,nsec) 
 
 class ListLoop(Looper):
@@ -199,15 +198,29 @@ class Plotter:
         # Utility class that manages data across levels
         class Data:
             def __init__(self):
-                self.tree = None
-                self.var  = None
+                self.title = ""
+                self.tree    = None
+                self.var     = None
+                self.weight  = None
+                self.fill    = None
+                self.color   = None
                 self.GC = []
-            def Fill(self, dat, title, cuts):
+            def Fill(self, dat, cuts):
+                listTitle = [self.title] if self.title else []
                 for d in dat: 
-                    if  'tree' in d:  self.tree = d['tree']
-                    if   'var' in d:  self.var  = d['var']
-                    if 'title' in d: title.append(d['title'])
-                    if   'cut' in d:  cuts.append(d['cut'])
+                    if   'fill' in d:  self.fill   = d[  'fill']
+                    if  'color' in d:  self.color  = d[ 'color']
+                    if 'weight' in d:  self.weight = d['weight']
+                    if   'tree' in d:  self.tree   = d[  'tree']
+                    if    'var' in d:  self.var    = d[   'var']
+                    if  'title' in d:  listTitle.append(d['title'])
+                    if    'cut' in d:  cuts.append(d['cut'])
+                self.title =','.join(listTitle)
+            def GetTitle(self):
+                ret = self.title
+                self.title = ""
+                return ret
+
         dt = Data()
         dt.plotter = self
 
