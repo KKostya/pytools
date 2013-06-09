@@ -52,3 +52,8 @@ class Product(Plotter):
                 dic[k[0]][k[1]] = datum[k] 
             ret.append(dic)
         return ret
+
+    def Draw(self, pdfname):
+        dt = self.Transpose()
+        for docset, grp in groupby(dt, lambda x: x['hist']):
+            print docset
