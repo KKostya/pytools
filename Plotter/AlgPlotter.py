@@ -1,4 +1,4 @@
-from itertools import product
+from itertools import product,groupby
 from copy import copy
 
 class Plotter(object):
@@ -34,10 +34,10 @@ class Page(Plotter):
         self.t = "page" 
         super(Page,self).__init__(**args)
 
-class Doc(Plotter):
+class Sec(Plotter):
     def __init__(self,**args):
-        self.t = "doc" 
-        super(Doc,self).__init__(**args)
+        self.t = "sec" 
+        super(Sec,self).__init__(**args)
 
 class Product(Plotter):
     def __init__(self,p1,p2):
@@ -55,5 +55,11 @@ class Product(Plotter):
 
     def Draw(self, pdfname):
         dt = self.Transpose()
-        for docset, grp in groupby(dt, lambda x: x['hist']):
-            print docset
+        for secset, scgrp in groupby(dt, lambda x: x['sec']):
+            print scgrp
+            for pagset, pggrp in groupby(scgrp, lambda x: x['page']):
+                print pggrp
+                for padset, pdgrp in groupby(pggrp, lambda x: x['pad']):
+                    print pdgrp
+                    for histset, hsgrp in groupby(pdgrp, lambda x: x['hist']):
+                        print hsgrp
