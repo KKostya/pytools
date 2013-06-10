@@ -3,6 +3,8 @@ from itertools import product,groupby,izip,count,tee
 from math import sqrt,ceil
 from copy import copy
 
+#TODO treat titles as cuts -- same cathegory combines them
+
 class Plotter(object):
     def __init__(self, **args):
         dic = {}
@@ -18,7 +20,15 @@ class Plotter(object):
 
     def __mul__(self, other):
         ret = copy(self) if other.t == self.t else Product(self,other)
-        ret.data = [dict(s.items() + o.items()) for s,o in product(self.data,other.data)]
+        ret.data = []
+        for s,o in product(self.data,other.data):
+            dct = dict(s.items() + o.items())
+            # Special treatment for cuts
+            if other.t == self.t:
+                if ((self.t,'cut') in s) and ((self.t,'cut') in o):
+                    print "Product cuts"
+                    dct[(self.t,'cut')] = "({0})&&({1})".format(s[(self.t,'cut')],o[(self.t,'cut')])
+            ret.data.append(dct)
         return ret
 
 class Hist(Plotter):
@@ -41,47 +51,74 @@ class Sec(Plotter):
         self.t = "sec" 
         super(Sec,self).__init__(**args)
 
+#http://stackoverflow.com/questions/480214/how-do-you-remove-duplicates-from-a-list-in-python-whilst-preserving-order
+#http://stackoverflow.com/questions/6280978/how-to-uniqify-a-list-of-dict-in-python
+#http://stackoverflow.com/questions/5844672/delete-an-element-from-a-dictionary
+def group(seq, key):
+    seen = set()
+    seen_add = lambda x: seen.add(tuple(x.items()))
+    ukeys = [ x[key] for x in seq if tuple(x[key].items()) not in seen and not seen_add(x[key])]
+    ret = []
+    for k in ukeys:
+        grp = []
+        for x in seq:
+            if x[key] != k: continue
+            dcp = dict(x)
+            del dcp[key]
+            grp.append(dcp)
+        ret.append((k,grp))
+    return ret
+
 class Product(Plotter):
     def __init__(self,p1,p2):
         self.t = tuple(sorted([p1.t,p2.t]))
 
     def Transpose(self):
-        ret = []
+        # Start with transpositions
+        tr = []
         for datum in self.data:
             dic = {}
             for k in datum:
                 if k[0] not in dic: dic[k[0]] = {}
                 dic[k[0]][k[1]] = datum[k] 
-            ret.append(dic)
-        return ret
+            tr.append(dic)
+        a = []
+        for secset, scgrp in group(tr,'sec'):
+            b = []
+            for pagset, pggrp in group(scgrp,'page'):
+                c = []
+                for padset, pdgrp in  group(pggrp,'pad'):
+                    d = []
+                    for histset, hsgrp in group(pdgrp,'hist'):
+                        d.append((histset,hsgrp))
+                    c.append((padset,d))
+                b.append((pagset,c))
+            a.append((secset,b))
+        return a
 
     def Draw(self, pdfname):
         GC = []
         plt = PlotUtil(pdfname)
         dt = self.Transpose()
-        
-        for secset, scgrp in groupby(dt, lambda x: x['sec']):
+        for secset, scgrp in dt:
             print secset
             plt.PaveText(secset.get("title",""),secset.get('text',[]))
-            for pagset, pggrp in groupby(scgrp, lambda x: x['page']):
+            for pagset, pggrp in scgrp:
                 print "  ",pagset
                 # Creating pads
-                pggrp, temp = tee(pggrp)
-                npads = len(list(groupby(temp, lambda x: x['pad'])))
+                npads = len(pggrp)
                 pageTitle = pagset['title'] if 'title' in pagset else "No title"
                 plt.setupPad(pageTitle,npads)
-                for (padset, pdgrp),npad in izip( groupby(pggrp, lambda x: x['pad']), count()):
+                for (padset, pdgrp),npad in izip( pggrp, count()):
                     print "    ",padset
                     # Creating legend
-                    pdgrp, temp = tee(pdgrp)
-                    nlgnd = len(list(temp))
+                    nlgnd = len(pdgrp)
                     plt.setupLegend(nlgnd)
                     # Creating histogram stack
                     plt.pad.cd(npad+1)
                     hstack = ROOT.THStack("hs",padset['title'] if 'title' in padset else "")
                     GC.append(hstack)
-             
-                    for (histset, hsgrp),nh in izip( groupby(pdgrp, lambda x: x['hist']), count()):
+                    for (histset, hsgrp),nh in izip(pdgrp, count()):
                         print "       ",histset
                         # Condensing plot data
                         diclst = [] 
@@ -96,7 +133,7 @@ class Product(Plotter):
                         cutstr = '&&'.join(cuts)
                         if 'weight' in settings: 
                             if settings['weight']: 
-                                cutstr = "{0}*({1})".format(settings['weight'],cutstr)
+                                cutstr = "{0}*({1})".format(settings['weight'],cutstr if cutstr else "1>0")
                         # Making histogram
                         hname = "htemp"+str(nh)
                         hist = ROOT.TH1F(hname,"No title",settings['var'][1],settings['var'][2],settings['var'][3]) 
@@ -105,8 +142,8 @@ class Product(Plotter):
                         # Set more options
                         hist.SetStats(ROOT.kFALSE)
                         if 'fill' in settings: hist.SetFillColor(settings['fill'])
-                        hist.SetLineColor('color' if 'color' in settings else ROOT.kBlack)
-                        hist.SetMarkerColor('color' if 'color' in settings else ROOT.kBlack)
+                        hist.SetLineColor(settings['color'] if 'color' in settings else ROOT.kBlack)
+                        hist.SetMarkerColor(settings['color'] if 'color' in settings else ROOT.kBlack)
                         # Drawing 
                         settings['tree'].Draw(settings['var'][0]+">>"+hname, cutstr)
                         # Processing legend
