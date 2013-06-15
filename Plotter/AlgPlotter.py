@@ -1,5 +1,5 @@
 import ROOT 
-from itertools import product,groupby,izip,count,tee
+from itertools import product,groupby,izip,count,tee,chain
 from math import sqrt,ceil
 from copy import copy
 
@@ -33,22 +33,22 @@ class Plotter(object):
 
 class Hist(Plotter):
     def __init__(self,**args):
-        self.t = "hist" 
+        self.t = "hist"
         super(Hist,self).__init__(**args)
 
 class Pad(Plotter):
     def __init__(self,**args):
-        self.t = "pad" 
+        self.t = "pad"
         super(Pad,self).__init__(**args)
 
 class Page(Plotter):
     def __init__(self,**args):
-        self.t = "page" 
+        self.t = "page"
         super(Page,self).__init__(**args)
 
 class Sec(Plotter):
     def __init__(self,**args):
-        self.t = "sec" 
+        self.t = "sec"
         super(Sec,self).__init__(**args)
 
 #http://stackoverflow.com/questions/480214/how-do-you-remove-duplicates-from-a-list-in-python-whilst-preserving-order
@@ -71,7 +71,9 @@ def group(seq, key):
 
 class Product(Plotter):
     def __init__(self,p1,p2):
-        self.t = tuple(sorted([p1.t,p2.t]))
+        a = (p1.t,) if type(p1.t) is str else p1.t
+        b = (p2.t,) if type(p2.t) is str else p2.t
+        self.t = tuple(sorted(set(a+b)))
 
     def Transpose(self):
         # Start with transpositions
@@ -141,7 +143,9 @@ class Product(Plotter):
                         GC.append(hist)
                         # Set more options
                         hist.SetStats(ROOT.kFALSE)
-                        if 'fill' in settings: hist.SetFillColor(settings['fill'])
+                        if 'width'  in settings: hist.SetLineWidth(settings['width'])
+                        if 'fill'   in settings: hist.SetFillColor(settings['fill'])
+                        if 'fstyle' in settings: hist.SetFillStyle(settings['fstyle'])
                         hist.SetLineColor(settings['color'] if 'color' in settings else ROOT.kBlack)
                         hist.SetMarkerColor(settings['color'] if 'color' in settings else ROOT.kBlack)
                         # Drawing 
@@ -159,7 +163,7 @@ globGC = []
 class PlotUtil(object):
     def __init__(self,pdfname):
         # Creatin empty canvas for
-        self.dummy = ROOT.TCanvas()
+        self.dummy = ROOT.TCanvas("dummy","")
         # Creating main canvas
         self.canv     = ROOT.TCanvas( "canv"  , "Spectra")
         self.titlepad = ROOT.TPad   ( "title" , "",0,0.9,1,1)
@@ -202,9 +206,12 @@ class PlotUtil(object):
     def PaveText(self,title,text):
         if not title: title = "No title"
         self.dummy.cd()
-        cuttext = ROOT.TPaveText(0.2,0.2,0.8,0.8,"NDC")
-        cuttext.AddText(title + ":")
+        tttext  = ROOT.TPaveText(0.1,0.9,0.9,0.8,"NDC")
+        tttext.AddText(title + ":")
+        cuttext = ROOT.TPaveText(0.2,0.2,0.8,0.78,"NDC")
+        cuttext.SetTextAlign(12)
         if text: [cuttext.AddText(t) for t in text]
+        tttext.Draw()
         cuttext.Draw()
         self.dummy.Print(self.pdfname,"Title: "+title)
 
